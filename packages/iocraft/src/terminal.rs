@@ -152,6 +152,7 @@ struct StdTerminal<'a> {
     mouse_capture: bool,
     raw_mode_enabled: bool,
     enabled_keyboard_enhancement: bool,
+    skip_keyboard_enhancement: bool,
     prev_canvas_top_row: u16,
     prev_canvas_height: u16,
     size: Option<(u16, u16)>,
@@ -382,6 +383,7 @@ impl<'a> StdTerminal<'a> {
         alt: Box<dyn Write + Send + 'a>,
         fullscreen: bool,
         mouse_capture: bool,
+        skip_keyboard_enhancement: bool,
     ) -> io::Result<Self> {
         let mut term = Self {
             dest,
@@ -391,6 +393,7 @@ impl<'a> StdTerminal<'a> {
             mouse_capture,
             raw_mode_enabled: false,
             enabled_keyboard_enhancement: false,
+            skip_keyboard_enhancement,
             prev_canvas_top_row: 0,
             prev_canvas_height: 0,
             size: None,
@@ -405,7 +408,9 @@ impl<'a> StdTerminal<'a> {
     fn set_raw_mode_enabled(&mut self, raw_mode_enabled: bool) -> io::Result<()> {
         if raw_mode_enabled != self.raw_mode_enabled {
             if raw_mode_enabled {
-                if terminal::supports_keyboard_enhancement().unwrap_or(false) {
+                if !self.skip_keyboard_enhancement
+                    && terminal::supports_keyboard_enhancement().unwrap_or(false)
+                {
                     self.dest.execute(event::PushKeyboardEnhancementFlags(
                         event::KeyboardEnhancementFlags::REPORT_EVENT_TYPES,
                     ))?;
@@ -558,6 +563,7 @@ impl<'a> Terminal<'a> {
         output: Output,
         fullscreen: bool,
         mouse_capture: bool,
+        skip_keyboard_enhancement: bool,
     ) -> io::Result<Self> {
         // dest is the render destination, alt is the other stream
         let (dest, alt) = match output {
@@ -565,7 +571,13 @@ impl<'a> Terminal<'a> {
             Output::Stderr => (stderr, stdout),
         };
         Ok(Self {
-            inner: Box::new(StdTerminal::new(dest, alt, fullscreen, mouse_capture)?),
+            inner: Box::new(StdTerminal::new(
+                dest,
+                alt,
+                fullscreen,
+                mouse_capture,
+                skip_keyboard_enhancement,
+            )?),
             output,
             event_stream: None,
             subscribers: Vec::new(),
@@ -774,6 +786,7 @@ mod tests {
             Output::Stdout,
             false,
             true,
+            false,
         )
         .unwrap();
         assert!(!terminal.is_raw_mode_enabled());
@@ -977,6 +990,7 @@ mod tests {
             mouse_capture: false,
             raw_mode_enabled: false,
             enabled_keyboard_enhancement: false,
+            skip_keyboard_enhancement: false,
             prev_canvas_top_row,
             prev_canvas_height,
             size: None,
@@ -1000,6 +1014,7 @@ mod tests {
             mouse_capture: false,
             raw_mode_enabled: false,
             enabled_keyboard_enhancement: false,
+            skip_keyboard_enhancement: false,
             prev_canvas_top_row: 0,
             prev_canvas_height,
             size: Some(term_size),
@@ -1528,6 +1543,7 @@ mod tests {
                 Output::Stdout,
                 false,
                 true,
+                false,
             )
             .unwrap();
             let canvas = Canvas::new(10, 1);

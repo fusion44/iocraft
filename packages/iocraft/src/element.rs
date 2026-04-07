@@ -302,6 +302,7 @@ enum RenderLoopFutureState<'a, E: ElementExt> {
         fullscreen: bool,
         mouse_capture: Option<bool>,
         ignore_ctrl_c: bool,
+        skip_keyboard_enhancement: bool,
         output: Output,
         stdout_writer: Option<Box<dyn Write + Send + 'a>>,
         stderr_writer: Option<Box<dyn Write + Send + 'a>>,
@@ -326,6 +327,7 @@ impl<'a, E: ElementExt + 'a> RenderLoopFuture<'a, E> {
                 fullscreen: false,
                 mouse_capture: None,
                 ignore_ctrl_c: false,
+                skip_keyboard_enhancement: false,
                 output: Output::default(),
                 stdout_writer: None,
                 stderr_writer: None,
@@ -383,6 +385,24 @@ impl<'a, E: ElementExt + 'a> RenderLoopFuture<'a, E> {
                 *ignore_ctrl_c = true;
             }
             _ => panic!("ignore_ctrl_c() must be called before polling the future"),
+        }
+        self
+    }
+
+    /// Prevents the terminal from enabling the Kitty keyboard enhancement protocol.
+    ///
+    /// This is useful when running inside terminal multiplexers like Zellij that already
+    /// enable the protocol on the outer terminal. Without this, the multiplexer may
+    /// double-encode keystrokes, causing garbled or duplicated input.
+    pub fn skip_keyboard_enhancement(mut self) -> Self {
+        match &mut self.state {
+            RenderLoopFutureState::Init {
+                skip_keyboard_enhancement,
+                ..
+            } => {
+                *skip_keyboard_enhancement = true;
+            }
+            _ => panic!("skip_keyboard_enhancement() must be called before polling the future"),
         }
         self
     }
@@ -466,6 +486,7 @@ impl<'a, E: ElementExt + Send + 'a> Future for RenderLoopFuture<'a, E> {
                         fullscreen,
                         mouse_capture,
                         ignore_ctrl_c,
+                        skip_keyboard_enhancement,
                         output,
                         stdout_writer,
                         stderr_writer,
@@ -475,6 +496,7 @@ impl<'a, E: ElementExt + Send + 'a> Future for RenderLoopFuture<'a, E> {
                             fullscreen,
                             mouse_capture,
                             ignore_ctrl_c,
+                            skip_keyboard_enhancement,
                             output,
                             stdout_writer,
                             stderr_writer,
@@ -483,6 +505,7 @@ impl<'a, E: ElementExt + Send + 'a> Future for RenderLoopFuture<'a, E> {
                             fullscreen,
                             mouse_capture,
                             ignore_ctrl_c,
+                            skip_keyboard_enhancement,
                             output,
                             stdout_writer,
                             stderr_writer,
@@ -502,6 +525,7 @@ impl<'a, E: ElementExt + Send + 'a> Future for RenderLoopFuture<'a, E> {
                         output,
                         fullscreen,
                         effective_mouse_capture,
+                        skip_keyboard_enhancement,
                     ) {
                         Ok(t) => t,
                         Err(e) => return std::task::Poll::Ready(Err(e)),
